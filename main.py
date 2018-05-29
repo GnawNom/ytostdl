@@ -11,6 +11,7 @@ import urllib
 from mutagen.easyid3 import EasyID3
 from mutagen.id3 import ID3, APIC, error
 from mutagen.mp3 import MP3
+import tracklist
 
 class MyLogger(object):
     def debug(self, msg):
@@ -24,7 +25,6 @@ class MyLogger(object):
 
 # Megaman OST
 # downloadAudio('https://www.youtube.com/watch?v=qzlUJk3-h_k')
-
 
 # Simple class to hold individual song data and metadata
 class Song(object):
@@ -44,12 +44,12 @@ class Song(object):
         audio = EasyID3(file_path)
         audio['title'] = self.title
         audio['album'] = self.album
-        audio['tracknumber'] = self.track_num
+        audio['tracknumber'] = str(self.track_num)
         audio.save()
 
-        if not self.coverfile:
+        if self.coverfile:
             audio = ID3(file_path)
-            with open(self.coverfile, 'wb') as f:
+            with open(self.coverfile, 'rb') as f:
                 audio['APIC'] = APIC(
                         encoding=3, # 3 is for utf-8
                         mime='image/jpeg', # image/jpeg or image/png
@@ -61,17 +61,25 @@ class Song(object):
 
 # Simple class to hold info about the OST
 class FullOst(object):
-    def __init__(self, description_file, info_json_file):
+    def __init__(self, description_file, info_dict, audio_filename):
         self.description_file = description_file
-        with open(info_json_file,"r") as f:
-            data = f.read()
-            self.info = json.loads(data)
-        self.audio_file = self.info['_filename']
+        self.info = info_dict
+        self.audio_file = audio_filename
+        # If chapters was not populated, then we take matters into our own hands
+        # 😤😤😤😤
+        if not self.info['chapters']:
+            chapters = {}
+            with open(self.description_file) as f:
+                chapters = tracklist.TrackList(f.read())
+            self.info['chapters'] = chapters
+        else
+            self.tracklist = tracklist.TrackList.from_chapters(chapters)
+
 
     # Youtube-dl removes the timestamp, but often the description will wrap the timestamp in
     # parens or square brackets.
-    def __scrub_song_name(self, song):
-        return song.replace('[]','').replace('()','')
+    def __scrub_song_name(self, name):
+        return name.replace('[]','').replace('()','').strip()
 
     def fetch_album_art(self, directory):
         urllib.request.urlretrieve(self.info['thumbnail'], "%s/art.jpeg" % (directory))
@@ -86,27 +94,30 @@ class FullOst(object):
                 print("File %s already exists and is not a folder", album_folder)
                 sys.exit(1)
 
-        chapters = self.info['chapters']
-        extension = self.info['ext']
-        fullOSTAudio = AudioSegment.from_file(self.audio_file, extension)
+        fullOSTAudio = AudioSegment.from_mp3(self.audio_file)
 
         self.fetch_album_art(album_folder)
 
-        for i,chapter in enumerate(chapters):
-            start_time = int(chapter['start_time']) * 1000
-            end_time =  int(chapter['end_time']) * 1000
+        for i,track in enumerate(self.tracklist):
+            # Seconds --> Milliseconds
+            start_time = int(track.start) * 1000
+            # Last track in the tracklist may not have an end timestamp
+            if track.end:
+                end_time =  int(track.end) * 1000
+            else:
+                end_time = len(fullOSTAudio)
             audio_segment = fullOSTAudio[start_time:end_time]
-            song_name = self.__scrub_song_name(chapter['title'])
-            tags = {'album': self.info['fulltitle'], 'track':i }
+            song_name = self.__scrub_song_name(track.title)
 
             print("Song: " + song_name)
             print("Folder: " + album_folder)
 
+            # Only supporting mp3 for now; downloading from YT so it ain't
+            # exactly audiophile grade material we're working with here
             song_filename = "%s/%s.%s" % (album_folder, song_name, 'mp3')
             song = Song(audio_segment, song_name, self.info['fulltitle'], i, "%s/art.jpeg" % (album_folder))
-            song.export(song_filename)
+            song.export(song_filename, "mp3")
             song.update_metadata(song_filename)
-
 
 # Remove .m4a, .description, and .json files in tmp dir
 def cleanUpTempDir():
@@ -129,7 +140,9 @@ def downloadAudio(url, download_dir=None):
             'key': 'FFmpegExtractAudio',
             'preferredcodec': 'mp3',
             'preferredquality': '192',
+            'nopostoverwrites': True,
         }],
+        'keepvideo': True,
         'writedescription': True,
         'writeinfojson': True,
         'outtmpl': download_dir + '/' + 'AUDIO.%(ext)s',
@@ -145,13 +158,20 @@ def main():
     parser.add_argument('--outputdir', type=str, default=os.getcwd(), required=False, help='directory to output songs to')
     parser.add_argument('--tmpdir', type=str, default=tempfile.mkdtemp(), required=False, help='staging directory for store full ost and metadata')
     args = parser.parse_args()
-    tmpdir= os.path.abspath(args.tmpdir)
-    outputdir= os.path.abspath(args.outputdir)
+    tmpdir = os.path.abspath(args.tmpdir)
+    outputdir = os.path.abspath(args.outputdir)
 
     downloadAudio(args.url, download_dir=args.tmpdir)
     description_file="%s/%s" % (args.tmpdir,'AUDIO.description')
     info_file="%s/%s" % (args.tmpdir,'AUDIO.info.json')
-    ost = FullOst(description_file,info_file)
+
+    info_dict = {}
+    with open(info_file,"r") as f:
+        data = f.read()
+        info_dict = json.loads(data)
+
+    audio_filename = info_dict['_filename'].replace(info_dict['ext'], 'mp3')
+    ost = FullOst(description_file,info_dict, audio_filename)
     ost.splitOST(outputdir)
 
 if __name__ == '__main__':
