@@ -9,6 +9,7 @@ pylint = "*"
 [packages]
 youtube-dl = "*"
 pydub = "*"
+mutagen = "*"
 
 [requires]
 python_version = "3.6"
