@@ -68,10 +68,8 @@ class FullOst(object):
         # If chapters was not populated, then we take matters into our own hands
         # 😤😤😤😤
         if not self.info['chapters']:
-            chapters = {}
             with open(self.description_file) as f:
-                chapters = tracklist.TrackList(f.read())
-            self.info['chapters'] = chapters
+                self.tracklist = tracklist.TrackList(f.read())
         else:
             self.tracklist = tracklist.TrackList.from_chapters(chapters)
 
@@ -97,12 +95,14 @@ class FullOst(object):
 
         self.fetch_album_art(album_folder)
 
-        for i,track in enumerate(self.tracklist):
+        for i,track in enumerate(self.tracklist.tracks):
             # Seconds --> Milliseconds
-            start_time = int(track.start) * 1000
+            start_time = int(track.start.to_seconds()) * 1000
             # Last track in the tracklist may not have an end timestamp
             if track.end:
-                end_time =  int(track.end) * 1000
+                if track.end == None:
+                    print(track)
+                end_time =  int(track.end.to_seconds()) * 1000
             else:
                 end_time = len(fullOSTAudio)
             audio_segment = fullOSTAudio[start_time:end_time]
@@ -114,7 +114,9 @@ class FullOst(object):
             # Only supporting mp3 for now; downloading from YT so it ain't
             # exactly audiophile grade material we're working with here
             song_filename = "%s/%s.%s" % (album_folder, song_name, 'mp3')
-            song = Song(audio_segment, song_name, self.info['fulltitle'], i, "%s/art.jpeg" % (album_folder))
+            # Use 1 indexing instead of 0 index
+            track_num = i+1
+            song = Song(audio_segment, song_name, self.info['fulltitle'], track_num, "%s/art.jpeg" % (album_folder))
             song.export(song_filename, "mp3")
             song.update_metadata(song_filename)
 

@@ -35,17 +35,22 @@ class Timestamp(object):
     def __repr__(self):
         'tracklist.timestamp(%s)' % self.timestamp
 
-class TrackList(object):
-    class Track(object):
-        def __init__(self, start, end, title):
-            self.start = start
-            self.end = end
-            self.title = title
+class Track(object):
+    def __init__(self, start, end, title):
+        self.start = start
+        self.end = end
+        self.title = title
 
+def __init__(self, description):
+    self.description=description
+    self.build_tracklist()
+    self.tracks = []
+
+
+class TrackList(object):
     def __init__(self, description):
-        self.description=description
+        self.description = description
         self.build_tracklist()
-        self.tracks = []
 
     @classmethod
     # TODO create a tracklist using chapters
@@ -59,11 +64,12 @@ class TrackList(object):
         for i,l in enumerate(self.description.splitlines()):
             matched = start_end_timestamp_reg.search(l)
             if matched:
-                start_timestamp = matched.group(1)
-                end_timestamp = matched.group(4)
-                timestamp = timestamp_reg.search(l).group()
+                start_timestamp = Timestamp(matched.group(1))
+                end_timestamp = Timestamp(matched.group(3))
+                timestamp = start_end_timestamp_reg.search(l).group()
                 songName = l.replace(timestamp, "").strip()
                 tracks.append(Track(start_timestamp, end_timestamp, songName))
+                continue
 
             matched = timestamp_reg.search(l)
             if matched:
@@ -75,12 +81,12 @@ class TrackList(object):
 
         # Should only be necessary if the descriptions have single timestamps
         for i,t in enumerate(tuples):
-            start_timestamp = t.timestamp
+            start_timestamp = Timestamp(t.timestamp)
             title = t.songname
             if i == len(tuples)-1:
                 end_timestamp = None
             else:
-                end_timestamp = tuples[i+1].timestamp
-            tracks.append(Track(start_timestamp, end_timestamp))
+                end_timestamp = Timestamp(tuples[i+1].timestamp)
+            tracks.append(Track(start_timestamp, end_timestamp, title))
                 
         self.tracks = tracks
