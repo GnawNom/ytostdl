@@ -62,22 +62,22 @@ class TrackList(object):
         tracks = []
         # TODO, kinda ugly, cleanup later?
         for i,l in enumerate(self.description.splitlines()):
-            matched = start_end_timestamp_reg.search(l)
-            if matched:
-                start_timestamp = Timestamp(matched.group(1))
-                end_timestamp = Timestamp(matched.group(3))
-                timestamp = start_end_timestamp_reg.search(l).group()
-                songName = l.replace(timestamp, "").strip()
-                tracks.append(Track(start_timestamp, end_timestamp, songName))
-                continue
-
             matched = timestamp_reg.search(l)
             if matched:
-                timestamp = matched.group(2)
-                wrapped_timestamp = matched.group()
-                # Remove the timestamp from the line
-                songName = l.replace(wrapped_timestamp, "").strip()
-                tuples.append(SingleTimestampSongLine(timestamp, songName))
+                #Split the string, and extact matching timestamps 
+                timestamp_matches = tuple(map(lambda x: timestamp_reg.match(x).group(0), filter(lambda x: x and timestamp_reg.match(x), timestamp_reg.split(l))))
+                if len(timestamp_matches) == 1:
+                    timestamp = Timestamp(timestamp_matches[0])
+                    wrapped_timestamp = matched.group()
+                    # Remove the timestamp from the line
+                    songName = l.replace(wrapped_timestamp, "").strip()
+                    tuples.append(SingleTimestampSongLine(timestamp, songName))
+                else:
+                    start_timestamp = Timestamp(timestamp_matches[0])
+                    end_timestamp = Timestamp(timestamp_matches[1])
+                    timestamps_string = start_end_timestamp_reg.search(l).group()
+                    songName = l.replace(timestamps_string, "").strip()
+                    tracks.append(Track(start_timestamp, end_timestamp, songName))
 
         # Should only be necessary if the descriptions have single timestamps
         for i,t in enumerate(tuples):
