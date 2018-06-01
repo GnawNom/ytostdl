@@ -69,9 +69,9 @@ class FullOst(object):
         # 😤😤😤😤
         if not self.info['chapters']:
             with open(self.description_file) as f:
-                self.tracklist = tracklist.TrackList(f.read())
+                self.tracklist = tracklist.TrackList.from_description((f.read()))
         else:
-            self.tracklist = tracklist.TrackList.from_chapters(chapters)
+            self.tracklist = tracklist.TrackList.from_chapters(self.info['chapters'])
 
     # Youtube-dl removes the timestamp, but often the description will wrap the timestamp in
     # parens or square brackets.
