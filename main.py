@@ -23,8 +23,7 @@ class MyLogger(object):
     def error(self, msg):
         print(msg)
 
-# Megaman OST
-# downloadAudio('https://www.youtube.com/watch?v=qzlUJk3-h_k')
+
 
 # Simple class to hold individual song data and metadata
 class Song(object):
@@ -121,8 +120,8 @@ class FullOst(object):
             song.update_metadata(song_filename)
 
 # Remove .m4a, .description, and .json files in tmp dir
-def cleanUpTempDir():
-    pass
+def cleanUpTempDir(tmpdir):
+    os.remove(tmpdir + "/art.jpeg")
 
 def downloadAudio(url, download_dir=None):
     if download_dir == None:
@@ -153,6 +152,9 @@ def downloadAudio(url, download_dir=None):
     with youtube_dl.YoutubeDL(ydl_opts) as ydl:
         ydl.download([url])
 
+#TODO Support downloading from list of urls
+#TODO Optimization: Do smart detection, if there is an audio only download option, use it; otherwise download hq video and ffmpeg extract
+#TODO Make a reuseable ostDL class
 def main():
     parser = argparse.ArgumentParser(description='Download and split Full OST from Youtube link')
     parser.add_argument('url', type=str, help='youtube link to download from')
@@ -174,6 +176,7 @@ def main():
     audio_filename = info_dict['_filename'].replace(info_dict['ext'], 'mp3')
     ost = FullOst(description_file,info_dict, audio_filename)
     ost.splitOST(outputdir)
+    cleanUpTempDir(args.tmpdir)
 
 if __name__ == '__main__':
     main()
