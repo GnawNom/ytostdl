@@ -88,10 +88,10 @@ class TrackList(object):
 
         # Should only be necessary if the descriptions have single timestamps
         for i,t in enumerate(tuples):
-            start_timestamp = Timestamp(t.timestamp)
+            start_timestamp = t.timestamp
             title = t.songname
             if i == len(tuples)-1:
                 end_timestamp = None
             else:
-                end_timestamp = Timestamp(tuples[i+1].timestamp)
+                end_timestamp = tuples[i+1].timestamp
             self.tracks.append(Track(start_timestamp, end_timestamp, title))

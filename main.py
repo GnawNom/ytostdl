@@ -139,7 +139,7 @@ def downloadAudio(url, download_dir=None):
         'postprocessors': [{
             'key': 'FFmpegExtractAudio',
             'preferredcodec': 'mp3',
-            'preferredquality': '192',
+            'preferredquality': 'best',
             'nopostoverwrites': True,
         }],
         'keepvideo': True,
@@ -155,17 +155,19 @@ def downloadAudio(url, download_dir=None):
 #TODO Support downloading from list of urls
 #TODO Optimization: Do smart detection, if there is an audio only download option, use it; otherwise download hq video and ffmpeg extract
 #TODO Make a reuseable ostDL class
+#TODO scan comments for a valid tracklist if no tracklist is provided in the comments
 def main():
     parser = argparse.ArgumentParser(description='Download and split Full OST from Youtube link')
     parser.add_argument('url', type=str, help='youtube link to download from')
     parser.add_argument('--outputdir', type=str, default=os.getcwd(), required=False, help='directory to output songs to')
     parser.add_argument('--tmpdir', type=str, default=tempfile.mkdtemp(), required=False, help='staging directory for store full ost and metadata')
+    parser.add_argument('--tracklist', type=str, default=None, required=False, help='text file with the track listing timestamps')
     args = parser.parse_args()
     tmpdir = os.path.abspath(args.tmpdir)
     outputdir = os.path.abspath(args.outputdir)
 
     downloadAudio(args.url, download_dir=args.tmpdir)
-    description_file="%s/%s" % (args.tmpdir,'AUDIO.description')
+    description_file=args.tracklist if args.tracklist else "%s/%s" % (args.tmpdir,'AUDIO.description')
     info_file="%s/%s" % (args.tmpdir,'AUDIO.info.json')
 
     info_dict = {}
@@ -176,7 +178,7 @@ def main():
     audio_filename = info_dict['_filename'].replace(info_dict['ext'], 'mp3')
     ost = FullOst(description_file,info_dict, audio_filename)
     ost.splitOST(outputdir)
-    cleanUpTempDir(args.tmpdir)
+    cleanUpTempDir(outputdir)
 
 if __name__ == '__main__':
     main()
