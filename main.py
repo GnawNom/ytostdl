@@ -23,8 +23,6 @@ class MyLogger(object):
     def error(self, msg):
         print(msg)
 
-
-
 # Simple class to hold individual song data and metadata
 class Song(object):
     def __init__(self, data, song_name, album_name, track_num, coverfile=None):
@@ -34,8 +32,8 @@ class Song(object):
         self.track_num = track_num
         self.coverfile = coverfile
 
-    def export(self, file_path, fileformat="mp3"):
-        self.data.export(file_path, format=fileformat)
+    def export(self, file_path, bitrate, fileformat="mp3"):
+        self.data.export(file_path, format=fileformat,bitrate=bitrate)
     
     def update_metadata(self, file_path):
         # Too lazy to read the spec, more efficient just to use ID3 to do
@@ -60,10 +58,12 @@ class Song(object):
 
 # Simple class to hold info about the OST
 class FullOst(object):
-    def __init__(self, description_file, info_dict, audio_filename):
+    def __init__(self, description_file, info_dict, audio_filename, ext, bitrate):
         self.description_file = description_file
         self.info = info_dict
         self.audio_file = audio_filename
+        self.ext = ext
+        self.bitrate = bitrate
         # If chapters was not populated, then we take matters into our own hands
         # 😤😤😤😤
         if not self.info['chapters']:
@@ -90,7 +90,7 @@ class FullOst(object):
                 print("File %s already exists and is not a folder", album_folder)
                 sys.exit(1)
 
-        fullOSTAudio = AudioSegment.from_mp3(self.audio_file)
+        fullOSTAudio = AudioSegment.from_file(self.audio_file, self.ext)
 
         self.fetch_album_art(album_folder)
 
@@ -116,7 +116,7 @@ class FullOst(object):
             # Use 1 indexing instead of 0 index
             track_num = i+1
             song = Song(audio_segment, song_name, self.info['fulltitle'], track_num, "%s/art.jpeg" % (album_folder))
-            song.export(song_filename, "mp3")
+            song.export(song_filename, "%dk" % self.bitrate, "mp3")
             song.update_metadata(song_filename)
 
 # Remove .m4a, .description, and .json files in tmp dir
@@ -126,31 +126,43 @@ def cleanUpTempDir(tmpdir):
 def downloadAudio(url, download_dir=None):
     if download_dir == None:
         download_dir = os.getcwd()
-    # ydl_opts = {
-    #     'writedescription': True,
-    #     'writeinfojson': True,
-    #     'outtmpl': download_dir + '/' + 'AUDIO.%(ext)s',
-    #     'logger': MyLogger(),
-    #     'format': 'bestaudio[ext=m4a]'
-    # }
 
     ydl_opts = {
-        'format': 'best',
-        'postprocessors': [{
-            'key': 'FFmpegExtractAudio',
-            'preferredcodec': 'mp3',
-            'preferredquality': 'best',
-            'nopostoverwrites': True,
-        }],
-        'keepvideo': True,
+        'format': 'bestaudio',
         'writedescription': True,
         'writeinfojson': True,
         'outtmpl': download_dir + '/' + 'AUDIO.%(ext)s',
         'logger': MyLogger(),
     }
 
+    # ydl_opts = {
+    #     'format': 'best',
+    #     'postprocessors': [{
+    #         'key': 'FFmpegExtractAudio',
+    #         'preferredcodec': 'mp3',
+    #         'preferredquality': 'best',
+    #         'nopostoverwrites': True,
+    #     }],
+    #     'keepvideo': True,
+    #     'writedescription': True,
+    #     'writeinfojson': True,
+    #     'outtmpl': download_dir + '/' + 'AUDIO.%(ext)s',
+    #     'logger': MyLogger(),
+    # }
+
     with youtube_dl.YoutubeDL(ydl_opts) as ydl:
         ydl.download([url])
+    
+    info_file="%s/%s" % (download_dir,'AUDIO.info.json')
+    info_dict={}
+    with open(info_file,"r") as f:
+        data = f.read()
+        info_dict = json.loads(data)
+
+    audio_ext = info_dict['ext']
+    audio_filename = info_dict['_filename']
+    bitrate = info_dict['abr']
+    return (audio_filename,audio_ext,bitrate)
 
 #TODO Support downloading from list of urls
 #TODO Optimization: Do smart detection, if there is an audio only download option, use it; otherwise download hq video and ffmpeg extract
@@ -166,7 +178,7 @@ def main():
     tmpdir = os.path.abspath(args.tmpdir)
     outputdir = os.path.abspath(args.outputdir)
 
-    downloadAudio(args.url, download_dir=args.tmpdir)
+    audio_filename,ext,bitrate= downloadAudio(args.url, download_dir=args.tmpdir)
     description_file=args.tracklist if args.tracklist else "%s/%s" % (args.tmpdir,'AUDIO.description')
     info_file="%s/%s" % (args.tmpdir,'AUDIO.info.json')
 
@@ -175,10 +187,9 @@ def main():
         data = f.read()
         info_dict = json.loads(data)
 
-    audio_filename = info_dict['_filename'].replace(info_dict['ext'], 'mp3')
-    ost = FullOst(description_file,info_dict, audio_filename)
+    ost = FullOst(description_file,info_dict, audio_filename, ext, bitrate)
     ost.splitOST(outputdir)
-    cleanUpTempDir(outputdir)
+    # cleanUpTempDir(outputdir)
 
 if __name__ == '__main__':
     main()
