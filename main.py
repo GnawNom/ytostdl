@@ -27,7 +27,7 @@ class MyLogger(object):
 
 def export_song_update_metadata(song):
     print("Song: " + song.title)
-    print("Album: " + song.album_name)
+    print("Album: " + song.album)
     song.export()
     song.update_metadata()
 
