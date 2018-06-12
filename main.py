@@ -13,6 +13,8 @@ from mutagen.id3 import ID3, APIC, error
 from mutagen.mp3 import MP3
 import tracklist
 
+import concurrent.futures
+
 class MyLogger(object):
     def debug(self, msg):
         print(msg)
@@ -23,19 +25,33 @@ class MyLogger(object):
     def error(self, msg):
         print(msg)
 
+def export_song_update_metadata(song):
+    print("Song: " + song.title)
+    print("Album: " + song.album_name)
+    song.export()
+    song.update_metadata()
+
 # Simple class to hold individual song data and metadata
 class Song(object):
-    def __init__(self, data, song_name, album_name, track_num, coverfile=None):
+    def __init__(self, data, song_name, album_name, track_num, bitrate, file_name, coverfile=None):
         self.data = data
         self.title = song_name
         self.album = album_name
         self.track_num = track_num
         self.coverfile = coverfile
+        self.bitrate = bitrate
+        self.file_name = file_name
 
-    def export(self, file_path, bitrate, fileformat="mp3"):
+    def export(self, file_path=None, bitrate=None, fileformat="mp3"):
+        if bitrate == None:
+            bitrate = "%dk" % self.bitrate
+        if file_path == None:
+            file_path = self.file_name
         self.data.export(file_path, format=fileformat,bitrate=bitrate)
     
-    def update_metadata(self, file_path):
+    def update_metadata(self, file_path=None):
+        if file_path == None:
+            file_path = self.file_name
         # Too lazy to read the spec, more efficient just to use ID3 to do
         # textual metadata and album art, but ¯\_(ツ)_/¯
         audio = EasyID3(file_path)
@@ -84,7 +100,7 @@ class FullOst(object):
     def splitOST(self, output_dir):
         album_folder = "%s/%s" %(output_dir, self.info['fulltitle'])
         try:
-            os.mkdir(album_folder)
+            os.makedirs(album_folder)
         except FileExistsError:
             if not os.path.isdir(album_folder):
                 print("File %s already exists and is not a folder", album_folder)
@@ -93,8 +109,7 @@ class FullOst(object):
         fullOSTAudio = AudioSegment.from_file(self.audio_file, self.ext)
 
         self.fetch_album_art(album_folder)
-
-        for i,track in enumerate(self.tracklist.tracks):
+        def track_to_song(i,track):
             # Seconds --> Milliseconds
             start_time = int(track.start.to_seconds()) * 1000
             # Last track in the tracklist may not have an end timestamp
@@ -107,17 +122,18 @@ class FullOst(object):
             audio_segment = fullOSTAudio[start_time:end_time]
             song_name = self.__scrub_song_name(track.title)
 
-            print("Song: " + song_name)
-            print("Folder: " + album_folder)
-
+            
             # Only supporting mp3 for now; downloading from YT so it ain't
             # exactly audiophile grade material we're working with here
             song_filename = "%s/%s.%s" % (album_folder, song_name, 'mp3')
             # Use 1 indexing instead of 0 index
             track_num = i+1
-            song = Song(audio_segment, song_name, self.info['fulltitle'], track_num, "%s/art.jpeg" % (album_folder))
-            song.export(song_filename, "%dk" % self.bitrate, "mp3")
-            song.update_metadata(song_filename)
+            return Song(audio_segment, song_name, self.info['fulltitle'], track_num, self.bitrate, song_filename, "%s/art.jpeg" % (album_folder))
+        
+        songs = map(lambda t: track_to_song(*t), enumerate(self.tracklist.tracks))
+        with concurrent.futures.ProcessPoolExecutor() as executor:
+            executor.map(export_song_update_metadata, songs)
+
 
 # Remove .m4a, .description, and .json files in tmp dir
 def cleanUpTempDir(tmpdir):
